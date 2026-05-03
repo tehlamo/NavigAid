@@ -64,8 +64,11 @@ def _analyze_floor(depth_map):
     """
     h, w = depth_map.shape
 
-    # Floor strip: bottom 25% height, center 50% width
-    strip_top = int(h * 0.75)
+    # Floor strip: bottom 40% height (was 25%), center 50% width.
+    # Expanded so the stair edge 1-2m ahead is captured when the camera is
+    # near-horizontal — at that angle the transition zone is in the middle
+    # rows of the frame, not just the very bottom.
+    strip_top = int(h * 0.60)
     strip_left = int(w * 0.25)
     strip_right = int(w * 0.75)
     strip = depth_map[strip_top:, strip_left:strip_right]
