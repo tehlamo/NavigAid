@@ -32,13 +32,13 @@ void moveForward() {
 }
 
 void moveLeft() {
-  digitalWrite(IN1, LOW);  digitalWrite(IN2, LOW);   // left motor: stop
+  digitalWrite(IN1, LOW);  digitalWrite(IN2, HIGH);   // left motor: backward
   digitalWrite(IN3, LOW);  digitalWrite(IN4, HIGH);  // right motor: forward
 }
 
 void moveRight() {
-  digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);   // left motor: forward
-  digitalWrite(IN3, LOW);  digitalWrite(IN4, LOW);   // right motor: stop
+  digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);   // left motor: forward
+  digitalWrite(IN3, LOW);  digitalWrite(IN4, HIGH);   // right motor: backward
 }
 
 void stopMotors() {
