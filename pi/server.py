@@ -53,6 +53,9 @@ def receive_cv():
             global _cv_data, _cv_timestamp
             _cv_data      = data
             _cv_timestamp = time.time()
+        # Log every incoming obstacle so you can confirm data is arriving
+        if data.get("obstacle"):
+            print(f"[CV IN] obstacle={data.get('obstacle')} dir={data.get('direction')} dist={data.get('distance_m')} conf={data.get('confidence')}")
     return jsonify({"status": "ok"}), 200
 
 
@@ -98,32 +101,32 @@ def control_loop():
     last_command = None
 
     while True:
-        now = time.time()
+        try:
+            now = time.time()
 
-        with _cv_lock:
-            cv        = dict(_cv_data) if _cv_data else None
-            cv_age_ms = (now - _cv_timestamp) * 1000 if _cv_timestamp else 9999
+            with _cv_lock:
+                cv        = dict(_cv_data) if _cv_data else None
+                cv_age_ms = (now - _cv_timestamp) * 1000 if _cv_timestamp > 0 else 9999
 
-        with _sensor_lock:
-            sensors = dict(_sensor_data)
+            with _sensor_lock:
+                sensors = dict(_sensor_data)
 
-        # Debug line — remove once everything is confirmed working
-        print(f"[DEBUG] L:{sensors.get('ultrasonic_left_cm')} R:{sensors.get('ultrasonic_right_cm')} cv_age={cv_age_ms:.0f}ms cv={cv}")
+            command = decide(cv, cv_age_ms, sensors)
 
-        command = decide(cv, cv_age_ms, sensors)
+            if command != last_command:
+                conf_str = fusion_confidence(cv, cv_age_ms, sensors)
+                print(f"[BRAIN] {command}  cv_age={cv_age_ms:.0f}ms  |  {conf_str}", flush=True)
+                last_command = command
 
-        if command != last_command:
-            conf_str = fusion_confidence(cv, cv_age_ms, sensors)
-            print(f"[BRAIN] {command} |  {conf_str}")
-            last_command = command
+            if _serial:
+                try:
+                    _serial.write(command.encode())
+                except Exception as e:
+                    print(f"[SERIAL] Write error: {e}", flush=True)
 
-        if _serial:
-            try:
-                _serial.write(command.encode())
-            except Exception as e:
-                print(f"[SERIAL] Write error: {e}")
-        else:
-            pass
+        except Exception as e:
+            # Never let the control loop die silently
+            print(f"[CONTROL LOOP ERROR] {e} — continuing", flush=True)
 
         time.sleep(0.2)
 

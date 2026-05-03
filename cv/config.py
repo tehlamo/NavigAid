@@ -1,4 +1,4 @@
-PI_ENDPOINT = "http://pi.local:5000/cv"
+PI_ENDPOINT = "http://192.168.68.60:5000/cv"
 POST_INTERVAL_S = 0.1  # 100ms
 
 # Phone camera stream
