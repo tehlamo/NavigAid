@@ -23,14 +23,12 @@ _cv_timestamp = 0.0
 _cv_lock      = threading.Lock()
 
 # ── Shared sensor state ───────────────────────────────────────────────────────
-_sensor_data = {"ultrasonic_cm": 9999, "laser_mm": 9999, "tilt": False}
+_sensor_data = {"ultrasonic_left_cm": 9999, "ultrasonic_right_cm": 9999, "tilt": False}
 _sensor_lock = threading.Lock()
 
 # ── Single shared serial connection ──────────────────────────────────────────
-# One object, used by both serial_reader (reads) and control_loop (writes).
-# pyserial is thread-safe for concurrent read/write on the same object.
 _serial = None
-SERIAL_PORT = "/dev/ttyACM0"   # update if needed: check with  ls /dev/tty*
+SERIAL_PORT = "/dev/ttyACM0"
 SERIAL_BAUD = 9600
 
 
@@ -109,6 +107,9 @@ def control_loop():
         with _sensor_lock:
             sensors = dict(_sensor_data)
 
+        # Debug line — remove once everything is confirmed working
+        print(f"[DEBUG] L:{sensors.get('ultrasonic_left_cm')} R:{sensors.get('ultrasonic_right_cm')} cv_age={cv_age_ms:.0f}ms cv={cv}")
+
         command = decide(cv, cv_age_ms, sensors)
 
         if command != last_command:
@@ -122,7 +123,6 @@ def control_loop():
             except Exception as e:
                 print(f"[SERIAL] Write error: {e}")
         else:
-            # No Arduino connected — just log so you can test brain logic alone
             pass
 
         time.sleep(0.2)
