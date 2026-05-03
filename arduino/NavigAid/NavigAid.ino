@@ -37,8 +37,8 @@ void moveLeft() {
 }
 
 void moveRight() {
-  digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);   // left motor: forward
-  digitalWrite(IN3, LOW);  digitalWrite(IN4, HIGH);   // right motor: backward
+  digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);   // left motor: forward
+  digitalWrite(IN3, HIGH);  digitalWrite(IN4, LOW);   // right motor: backward
 }
 
 void stopMotors() {
@@ -77,6 +77,7 @@ void loop() {
   float left  = readUS(TRIG_LEFT, ECHO_LEFT);
   float right = readUS(TRIG_RIGHT, ECHO_RIGHT);
   uint16_t laserMm = laser.readRangeContinuousMillimeters() / 10.0;
+  if (laser.timeoutOccurred()) laserMm = 6553;
 
   int16_t ax, ay, az, gx, gy, gz;
   mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
