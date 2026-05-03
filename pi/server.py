@@ -111,6 +111,8 @@ def control_loop():
             with _sensor_lock:
                 sensors = dict(_sensor_data)
 
+            print(f"[DEBUG] L:{sensors.get('ultrasonic_left_cm')} R:{sensors.get('ultrasonic_right_cm')} cv_age={cv_age_ms:.0f}ms cv={cv}")
+
             command = decide(cv, cv_age_ms, sensors)
 
             if command != last_command:
@@ -120,7 +122,7 @@ def control_loop():
 
             if _serial:
                 try:
-                    _serial.write(command.encode())
+                  pass #  _serial.write(command.encode())
                 except Exception as e:
                     print(f"[SERIAL] Write error: {e}", flush=True)
 
