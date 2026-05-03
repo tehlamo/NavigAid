@@ -9,7 +9,9 @@ import importlib
 import brain
 
 SENSORS_CLEAR = {"ultrasonic_left_cm": 9999, "ultrasonic_right_cm": 9999, "tilt": False}
-SENSORS_LEFT_CLOSE = {"ultrasonic_left_cm": 20, "ultrasonic_right_cm": 9999, "tilt": False}
+SENSORS_LEFT_CLOSE  = {"ultrasonic_left_cm": 20,   "ultrasonic_right_cm": 9999, "tilt": False}
+SENSORS_RIGHT_CLOSE = {"ultrasonic_left_cm": 9999, "ultrasonic_right_cm": 20,  "tilt": False}
+SENSORS_BOTH_CLOSE  = {"ultrasonic_left_cm": 20,   "ultrasonic_right_cm": 20,  "tilt": False}
 SENSORS_TILT = {"ultrasonic_left_cm": 9999, "ultrasonic_right_cm": 9999, "tilt": True}
 
 cases = [
@@ -57,8 +59,14 @@ cases = [
      {"obstacle": True, "direction": "center", "distance_m": 0.42, "confidence": 0.86}, 600, SENSORS_CLEAR),
 
     # ── Hardware override ──────────────────────────────────────────────────────
-    ("HW: left ultrasonic 20cm — STOP overrides clear CV",
-     {"obstacle": False, "direction": "none",  "distance_m": None, "confidence": 0.0}, 80, SENSORS_LEFT_CLOSE),
+    ("HW: left sensor 20cm — steer RIGHT (away from left obstacle)",
+     {"obstacle": False, "direction": "none", "distance_m": None, "confidence": 0.0}, 80, SENSORS_LEFT_CLOSE),
+
+    ("HW: right sensor 20cm — steer LEFT (away from right obstacle)",
+     {"obstacle": False, "direction": "none", "distance_m": None, "confidence": 0.0}, 80, SENSORS_RIGHT_CLOSE),
+
+    ("HW: both sensors 20cm — STOP (blocked on both sides)",
+     {"obstacle": False, "direction": "none", "distance_m": None, "confidence": 0.0}, 80, SENSORS_BOTH_CLOSE),
 
     ("HW: tilt — emergency STOP",
      None, 80, SENSORS_TILT),

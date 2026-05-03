@@ -63,11 +63,20 @@ def decide(cv_data: dict | None, cv_age_ms: float, sensors: dict) -> tuple[str, 
     right_cm = sensors.get("ultrasonic_right_cm", 9999)
 
     # ── Rule 1: Hardware sensor override ──────────────────────────────────────
-    # Imminent physical collision — always immediate, no hysteresis.
-    if left_cm < ULTRASONIC_STOP_CM or right_cm < ULTRASONIC_STOP_CM:
+    # Both sensors close → blocked straight ahead, stop.
+    # One sensor close  → steer away from that side (guide the user around).
+    if left_cm < ULTRASONIC_STOP_CM and right_cm < ULTRASONIC_STOP_CM:
         _last_command    = "S"
         _last_command_ts = now
         return ("S", SPEED_MAX_STEER)
+    if left_cm < ULTRASONIC_STOP_CM:
+        _last_command    = "R"
+        _last_command_ts = now
+        return ("R", SPEED_MAX_STEER)
+    if right_cm < ULTRASONIC_STOP_CM:
+        _last_command    = "L"
+        _last_command_ts = now
+        return ("L", SPEED_MAX_STEER)
 
     # ── Hysteresis ────────────────────────────────────────────────────────────
     hold_active = (now - _last_command_ts) * 1000 < COMMAND_HOLD_MS
