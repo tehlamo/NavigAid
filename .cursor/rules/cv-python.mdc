@@ -1,0 +1,35 @@
+---
+description: CV module coding conventions for NavigAid MacBook component
+globs: cv/**/*.py
+alwaysApply: false
+---
+
+# CV Module Conventions
+
+## Module layout
+- `config.py` — all tuneable constants, no logic
+- `detector.py` — YOLO wrapper, returns best detection dict or None
+- `estimator.py` — direction zones + distance heuristic, pure functions
+- `main.py` — camera loop, POST loop, debug display
+
+## Key constraints
+- Frame size must stay 640x480 (speed)
+- Use `yolov8n.pt` (nano), never medium/large on MacBook
+- POST must happen every 100ms regardless of detection result (Pi expects heartbeat)
+- POST errors must print a warning and NOT crash the loop (try/except around every POST)
+- Camera source is set in config.CAMERA_SOURCE — never hardcode it
+
+## Detection dict shape
+```python
+{"label": str, "confidence": float, "cx": int, "cy": int,
+ "box_h": int, "x1": int, "y1": int, "x2": int, "y2": int}
+```
+
+## Payload shape (always send this exact structure)
+```python
+{"obstacle": bool, "direction": str, "distance_m": float|None, "confidence": float}
+```
+
+## Distance calibration
+Hold object at 1.0m, press 'c' in the debug window to capture reference height.
+Formula: `distance_m = (REFERENCE_HEIGHT_PX * 1.0) / box_h`

@@ -1,0 +1,41 @@
+---
+description: NavigAid smart cane — overall project context and shared interfaces
+alwaysApply: true
+---
+
+# NavigAid — AI Smart Cane (Hackathon)
+
+Hackathon project. Deadline: 1:00 AM. 3-person team.
+
+## What it does
+Blind cane that detects obstacles via computer vision and physically steers itself away using differential motors.
+
+## Pipeline
+```
+iPhone camera -> MacBook (CV) -> Pi (decision AI) -> Arduino (motors)
+```
+
+## Shared Interfaces — DO NOT CHANGE WITHOUT TELLING TEAMMATES
+
+### MacBook -> Pi
+POST `http://pi.local:5000/cv` every 100ms:
+```json
+{"obstacle": true, "direction": "left", "distance_m": 0.84, "confidence": 0.87}
+```
+direction values: "left" | "right" | "center" | "none"
+
+### Pi -> Arduino (serial 9600 baud)
+Single char: F=forward, L=left, R=right, S=stop
+
+### Arduino -> Pi (serial every 100ms)
+```json
+{"ultrasonic_cm": 45, "laser_mm": 423, "tilt": false}
+```
+
+## Safety Rule
+Hardware sensors ALWAYS override CV. If laser_mm < 300 OR ultrasonic_cm < 40: stop/steer regardless of CV.
+
+## Team Roles
+- CV (MacBook): YOLOv8 + HTTP POST — `cv/` folder
+- Pi (decision AI): Flask server + sensor fusion — `pi/` folder  
+- Arduino (hardware): motors + sensors — `arduino/` folder
