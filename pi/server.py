@@ -30,7 +30,7 @@ _sensor_lock = threading.Lock()
 # One object, used by both serial_reader (reads) and control_loop (writes).
 # pyserial is thread-safe for concurrent read/write on the same object.
 _serial = None
-SERIAL_PORT = "/dev/ttyUSB0"   # update if needed: check with  ls /dev/tty*
+SERIAL_PORT = "/dev/ttyACM0"   # update if needed: check with  ls /dev/tty*
 SERIAL_BAUD = 9600
 
 
@@ -62,9 +62,8 @@ def receive_cv():
 
 def serial_reader():
     """
-    Reads sensor JSON from Arduino continuously.
-    Arduino sends every ~100ms:
-      {"ultrasonic_cm": 45, "laser_mm": 423, "tilt": false}
+    Reads sensor data from Arduino continuously.
+    Arduino sends: USL:195.96 USR:6.12
     """
     while True:
         if _serial is None:
@@ -74,11 +73,18 @@ def serial_reader():
             line = _serial.readline().decode("utf-8").strip()
             if not line:
                 continue
-            data = json.loads(line)
+            parts = {}
+            for token in line.split():
+                if ":" in token:
+                    key, val = token.split(":")
+                    parts[key] = float(val)
+            data = {
+                "ultrasonic_left_cm": parts.get("USL", 9999),
+                "ultrasonic_right_cm": parts.get("USR", 9999),
+                "tilt": False
+            }
             with _sensor_lock:
                 _sensor_data.update(data)
-        except json.JSONDecodeError:
-            pass
         except Exception as e:
             print(f"[SERIAL] Read error: {e}")
             time.sleep(0.1)
@@ -103,11 +109,11 @@ def control_loop():
         with _sensor_lock:
             sensors = dict(_sensor_data)
 
-        command, speed = decide(cv, cv_age_ms, sensors)
+        command = decide(cv, cv_age_ms, sensors)
 
         if command != last_command:
             conf_str = fusion_confidence(cv, cv_age_ms, sensors)
-            print(f"[BRAIN] {command} speed={speed}  |  {conf_str}")
+            print(f"[BRAIN] {command} |  {conf_str}")
             last_command = command
 
         if _serial:
