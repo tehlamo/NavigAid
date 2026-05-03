@@ -102,6 +102,8 @@ def build_yolo_payload(det):
     distance_m = estimator.get_distance(det["box_h"], det["label"])
     if distance_m > config.MAX_REACT_DISTANCE_M:
         return None
+    if distance_m < config.MIN_REACT_DISTANCE_M:
+        return None  # hardware sensors own this range — CV is too noisy here
     raw_dir = estimator.get_direction(det["x1"], det["x2"], config.FRAME_WIDTH)
     # Only smooth actual detections — never inject "none" into the buffer so
     # the buffer doesn't vote against a real obstacle when it first appears.

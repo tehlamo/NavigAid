@@ -22,7 +22,7 @@ RIGHT_ZONE_START = 2 * FRAME_WIDTH / 3
 REFERENCE_HEIGHT_PX = 200
 REFERENCE_DISTANCE_M = 1.0
 
-MIN_CONFIDENCE = 0.4
+MIN_CONFIDENCE = 0.45
 
 # Per-class bounding-box height (px) when the object is exactly 1 m away.
 # Used by estimator.get_distance() so that a chair at 1m is not mistaken for
@@ -68,4 +68,5 @@ DEPTH_STEP_ROW_THRESHOLD = 0.28
 # Beyond this, the object exists but is not yet an immediate threat — don't act.
 # At walking speed (~1 m/s), 2.5m = ~2.5 seconds of reaction time.
 # Raise if cane should respond earlier; lower if too many false steers in crowds.
+MIN_REACT_DISTANCE_M = 0.45  # below this, hardware sensors take over — CV is too noisy
 MAX_REACT_DISTANCE_M = 2.5
