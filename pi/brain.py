@@ -49,9 +49,17 @@ def decide(cv_data: dict | None, cv_age_ms: float, sensors: dict) -> str:
 
     # ── Rule 1: Hardware sensor override ──────────────────────────────────────
     if left_cm < ULTRASONIC_STOP_CM or right_cm < ULTRASONIC_STOP_CM:
-        _last_command = "S"
-        _last_command_ts = now
-        return "S"
+        if left_cm < right_cm:
+            # obstacle closer on left → steer right
+            return _set("R", now)
+        elif right_cm < left_cm:
+            # obstacle closer on right → steer left
+            return _set("L", now)
+        else:
+            # both equally close → stop
+            _last_command = "S"
+            _last_command_ts = now
+            return "S"
 
     # ── Hysteresis ────────────────────────────────────────────────────────────
     hold_active = (now - _last_command_ts) * 1000 < COMMAND_HOLD_MS
