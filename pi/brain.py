@@ -29,6 +29,7 @@ import time
 # ── Thresholds ─────────────────────────────────────────────────────────────────
 ULTRASONIC_STOP_CM   = 80      # sensor reaction zone: side-specific turn, both sides stop
 LASER_BLOCK_CM       = 100     # laser trigger distance (1 meter)
+LASER_BROKEN_VALUE   = 6553    # invalid laser reading: ignore laser entirely
 PITCH_STOP_THRESHOLD = -60     # pitch >= -60 means stop/off
 CV_TIMEOUT_MS        = 500     # treat CV as offline if no POST in 500ms
 CV_MIN_CONFIDENCE    = 0.55    # ignore CV detections below this confidence
@@ -54,11 +55,13 @@ def decide(cv_data: dict | None, cv_age_ms: float, sensors: dict) -> str:
     right_cm = sensors.get("ultrasonic_right_cm", 9999)
     laser_cm = sensors.get("laser", 9999)
     pitch    = sensors.get("pitch", 9999)
+    if laser_cm == LASER_BROKEN_VALUE:
+        laser_cm = 9999
 
     cv_online = (cv_age_ms < CV_TIMEOUT_MS) and (cv_data is not None)
 
     # ── Rule 1: Pitch safety switch ────────────────────────────────────────────
-    if pitch >= PITCH_STOP_THRESHOLD:
+    if pitch != 0 and pitch >= PITCH_STOP_THRESHOLD:
         return _set("S", now)
 
     # ── Rule 2/3: Ultrasonic reaction (unchanged) ─────────────────────────────

@@ -92,6 +92,7 @@ def serial_reader():
                 "pitch": parts.get("PITCH", 9999),
                 "roll": parts.get("ROLL", 9999)
             }
+            print("[DEBUG] UL (cm):", data['ultrasonic_left_cm'], "UR (cm):", data['ultrasonic_right_cm'], "Laser (cm):", data['laser'], "Pitch:", data['pitch'])
             with _sensor_lock:
                 _sensor_data.update(data)
         except Exception as e:
