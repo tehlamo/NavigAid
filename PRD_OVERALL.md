@@ -44,9 +44,7 @@ Phone camera → MacBook (Computer Vision)
 | Arduino Uno | Motor control, sensor reading |
 | 2x TT Gear Motors + wheels | Differential steering |
 | L298N Motor Driver | Controls both motors from Arduino |
-| HC-SR04 Ultrasonic (x2) | Obstacle distance detection |
-| VL53L0X ToF Laser | Precise short-range distance |
-| MPU-6050 IMU | Tilt / fall detection |
+| HC-SR04 Ultrasonic (x2) | One angled left, one angled right — obstacle detection on each side |
 | iPhone | Camera stream |
 | MacBook | Computer vision processing |
 | 9V battery | Powers Arduino |
@@ -85,9 +83,7 @@ Phone camera → MacBook (Computer Vision)
 
 ### Teammate 3 — Arduino (Hardware)
 - Motor control (differential steering)
-- HC-SR04 ultrasonic sensor reading
-- VL53L0X laser sensor reading
-- MPU-6050 tilt detection
+- HC-SR04 ultrasonic reading — left sensor angled left, right sensor angled right
 - Serial communication with Pi
 
 ---
@@ -107,33 +103,35 @@ POST `http://pi.local:5000/cv` every 100ms
 ```
 
 ### Interface 2: Pi → Arduino
-Serial at 9600 baud, single character commands:
+Serial at 9600 baud, full-word commands:
 
 ```
-F = forward
-L = turn left
-R = turn right
-S = stop
+FORWARD = go forward
+LEFT    = turn left
+RIGHT   = turn right
+STOP    = stop
 ```
 
 ### Interface 3: Arduino → Pi
 Serial response with sensor data every 100ms:
 
-```json
-{
-  "ultrasonic_cm": 45,
-  "laser_mm": 423,
-  "tilt": false
-}
 ```
+USL:45.00 USR:62.00
+```
+
+`USL` = left ultrasonic distance (cm), `USR` = right ultrasonic distance (cm)
 
 ---
 
 ## Decision Logic (Pi)
 
 ```
-IF laser_mm < 300 OR ultrasonic_cm < 40:
-    immediate stop or steer away (hardware sensors override everything)
+IF USL < 40 AND USR < 40:
+    stop (obstacle directly ahead on both sides)
+ELSE IF USL < 40:
+    turn right (obstacle on left)
+ELSE IF USR < 40:
+    turn left (obstacle on right)
 ELSE IF CV obstacle AND direction == "left":
     turn right
 ELSE IF CV obstacle AND direction == "right":
