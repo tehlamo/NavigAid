@@ -1,0 +1,6 @@
+{
+  "sketch": "NavigAid.ino",
+  "board": "arduino:avr:uno",
+  "output": ".build",
+  "port": "COM3"
+}

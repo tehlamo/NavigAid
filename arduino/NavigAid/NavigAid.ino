@@ -24,13 +24,13 @@ void moveForward() {
 }
 
 void moveLeft() {
-  digitalWrite(IN1, LOW);  digitalWrite(IN2, HIGH);
-  digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
+  digitalWrite(IN1, LOW);  digitalWrite(IN2, LOW);   // left motor: stop
+  digitalWrite(IN3, LOW);  digitalWrite(IN4, HIGH);  // right motor: forward
 }
 
 void moveRight() {
-  digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
-  digitalWrite(IN3, HIGH);  digitalWrite(IN4, LOW);
+  digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);   // left motor: forward
+  digitalWrite(IN3, LOW);  digitalWrite(IN4, LOW);   // right motor: stop
 }
 
 void stopMotors() {
@@ -64,10 +64,10 @@ void loop() {
   if (Serial.available() > 0) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
-    if (cmd == "FORWARD") moveForward();
-    else if (cmd == "LEFT")    moveLeft();
-    else if (cmd == "RIGHT")   moveRight();
-    else if (cmd == "STOP")    stopMotors();
+    if (cmd == "F") moveForward();
+    else if (cmd == "L")    moveLeft();
+    else if (cmd == "R")   moveRight();
+    else if (cmd == "S")    stopMotors();
   }
 
   delay(100);

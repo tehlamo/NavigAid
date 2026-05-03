@@ -1,0 +1,18 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Upload to Arduino Uno",
+      "type": "shell",
+      "command": "& 'C:\\Users\\tehla\\AppData\\Local\\Programs\\Arduino IDE\\resources\\app\\lib\\backend\\resources\\arduino-cli.exe' compile --fqbn arduino:avr:uno '${workspaceFolder}' && & 'C:\\Users\\tehla\\AppData\\Local\\Programs\\Arduino IDE\\resources\\app\\lib\\backend\\resources\\arduino-cli.exe' upload -p COM3 --fqbn arduino:avr:uno '${workspaceFolder}'",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
+}
