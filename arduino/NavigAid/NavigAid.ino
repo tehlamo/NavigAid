@@ -53,21 +53,18 @@ void setup() {
 }
 
 void loop() {
-  float left = readUS(TRIG_LEFT, ECHO_LEFT);
+  float left  = readUS(TRIG_LEFT, ECHO_LEFT);
   float right = readUS(TRIG_RIGHT, ECHO_RIGHT);
 
-  Serial.print("USL:");
-  Serial.print(left);
-  Serial.print(" USR:");
-  Serial.println(right);
+  Serial.print("USL:"); Serial.print(left);
+  Serial.print(" USR:"); Serial.println(right);
 
   if (Serial.available() > 0) {
-    String cmd = Serial.readStringUntil('\n');
-    cmd.trim();
-    if (cmd == "F") moveForward();
-    else if (cmd == "L")    moveLeft();
-    else if (cmd == "R")   moveRight();
-    else if (cmd == "S")    stopMotors();
+    char cmd = Serial.read();
+    if (cmd == 'F')      moveForward();
+    else if (cmd == 'L') moveLeft();
+    else if (cmd == 'R') moveRight();
+    else if (cmd == 'S') stopMotors();
   }
 
   delay(100);
