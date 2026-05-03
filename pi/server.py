@@ -6,7 +6,6 @@ Run: python server.py
 
 One serial connection shared between reader thread and control loop.
 Flask receives CV data from MacBook over WiFi.
-Serial sends single command char to Arduino: F | L | R | S
 """
 
 import time
@@ -24,7 +23,13 @@ _cv_timestamp = 0.0
 _cv_lock      = threading.Lock()
 
 # ── Shared sensor state ───────────────────────────────────────────────────────
-_sensor_data = {"ultrasonic_left_cm": 9999, "ultrasonic_right_cm": 9999, "tilt": False}
+_sensor_data = {
+                "ultrasonic_left_cm": 9999,
+                "ultrasonic_right_cm": 9999,
+                "laser": 9999,
+                "pitch": 9999,
+                "roll": 9999
+                }
 _sensor_lock = threading.Lock()
 
 # ── Single shared serial connection ──────────────────────────────────────────
@@ -36,18 +41,11 @@ SERIAL_BAUD = 9600
 def open_serial():
     global _serial
     try:
-        if _serial is not None:
-            try:
-                _serial.close()
-            except Exception:
-                pass
-            _serial = None
         _serial = serial.Serial(SERIAL_PORT, SERIAL_BAUD, timeout=1)
-        print(f"[SERIAL] Connected on {SERIAL_PORT} at {SERIAL_BAUD} baud", flush=True)
+        print(f"[SERIAL] Connected on {SERIAL_PORT} at {SERIAL_BAUD} baud")
     except Exception as e:
-        print(f"[SERIAL] Could not open {SERIAL_PORT}: {e}", flush=True)
-        print("[SERIAL] Running without Arduino — commands printed to console only", flush=True)
-        _serial = None
+        print(f"[SERIAL] Could not open {SERIAL_PORT}: {e}")
+        print("[SERIAL] Running without Arduino — commands printed to console only")
 
 
 # ── Flask endpoint ─────────────────────────────────────────────────────────────
@@ -61,8 +59,9 @@ def receive_cv():
             global _cv_data, _cv_timestamp
             _cv_data      = data
             _cv_timestamp = time.time()
+        # Log every incoming obstacle so you can confirm data is arriving
         if data.get("obstacle"):
-            print(f"[CV IN] obstacle={data.get('obstacle')} dir={data.get('direction')} dist={data.get('distance_m')} conf={data.get('confidence')}", flush=True)
+            print(f"[CV IN] obstacle={data.get('obstacle')} dir={data.get('direction')} dist={data.get('distance_m')} conf={data.get('confidence')}")
     return jsonify({"status": "ok"}), 200
 
 
@@ -71,38 +70,32 @@ def receive_cv():
 def serial_reader():
     """
     Reads sensor data from Arduino continuously.
-    Arduino sends: USL:195.96 USR:6.12
-    Retries open_serial() every 2s when disconnected.
+    Arduino sends: USL:232.80 USR:78.56 LAS:4 PITCH:-61.4 ROLL:179.7
     """
     while True:
         if _serial is None:
-            time.sleep(2)
-            open_serial()  # keep retrying until Arduino comes back
+            time.sleep(0.1)
             continue
         try:
-            line = _serial.readline().decode("utf-8", errors="ignore").strip()
+            line = _serial.readline().decode("utf-8").strip()
             if not line:
                 continue
             parts = {}
             for token in line.split():
                 if ":" in token:
-                    key, _, val = token.partition(":")
-                    try:
-                        parts[key.strip()] = float(val.strip())
-                    except ValueError:
-                        pass
-            left  = parts.get("USL", 9999)
-            right = parts.get("USR", 9999)
+                    key, val = token.split(":")
+                    parts[key] = float(val)
             data = {
-                # Filter HC-SR04 false-zero readings (< 2cm = physically impossible)
-                "ultrasonic_left_cm":  left  if left  > 2 else 9999,
-                "ultrasonic_right_cm": right if right > 2 else 9999,
-                "tilt": False
+                "ultrasonic_left_cm": parts.get("USL", 9999),
+                "ultrasonic_right_cm": parts.get("USR", 9999),
+                "laser": parts.get("LAS", 9999),
+                "pitch": parts.get("PITCH", 9999),
+                "roll": parts.get("ROLL", 9999)
             }
             with _sensor_lock:
                 _sensor_data.update(data)
         except Exception as e:
-            print(f"[SERIAL] Read error: {e}", flush=True)
+            print(f"[SERIAL] Read error: {e}")
             time.sleep(0.1)
 
 
@@ -111,11 +104,9 @@ def serial_reader():
 def control_loop():
     """
     Runs every 200ms. Reads latest CV + sensor state, calls brain.decide(),
-    sends single command char to Arduino on change or 1s heartbeat.
+    sends the motor command char to Arduino over the shared serial connection.
     """
-    last_command   = None
-    last_sent_cmd  = None
-    last_heartbeat = 0.0
+    last_command = None
 
     while True:
         try:
@@ -135,19 +126,14 @@ def control_loop():
                 print(f"[BRAIN] {command}  cv_age={cv_age_ms:.0f}ms  |  {conf_str}", flush=True)
                 last_command = command
 
-            # Write on change or 1s heartbeat — prevents Arduino buffer starvation
-            changed   = command != last_sent_cmd
-            heartbeat = (now - last_heartbeat) >= 1.0
-            if _serial and (changed or heartbeat):
+            if _serial:
                 try:
-                    _serial.write(command.encode())
-                    last_sent_cmd  = command
-                    last_heartbeat = now
+                  _serial.write(command.encode())
                 except Exception as e:
-                    print(f"[SERIAL] Write error: {e} — attempting reconnect", flush=True)
-                    open_serial()
+                    print(f"[SERIAL] Write error: {e}", flush=True)
 
         except Exception as e:
+            # Never let the control loop die silently
             print(f"[CONTROL LOOP ERROR] {e} — continuing", flush=True)
 
         time.sleep(0.2)
