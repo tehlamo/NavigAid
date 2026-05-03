@@ -23,7 +23,13 @@ _cv_timestamp = 0.0
 _cv_lock      = threading.Lock()
 
 # ── Shared sensor state ───────────────────────────────────────────────────────
-_sensor_data = {"ultrasonic_left_cm": 9999, "ultrasonic_right_cm": 9999, "tilt": False}
+_sensor_data = {
+                "ultrasonic_left_cm": 9999,
+                "ultrasonic_right_cm": 9999,
+                "laser": 9999,
+                "pitch": 9999,
+                "roll": 9999
+                }
 _sensor_lock = threading.Lock()
 
 # ── Single shared serial connection ──────────────────────────────────────────
@@ -64,7 +70,7 @@ def receive_cv():
 def serial_reader():
     """
     Reads sensor data from Arduino continuously.
-    Arduino sends: USL:195.96 USR:6.12
+    Arduino sends: USL:232.80 USR:78.56 LAS:4 PITCH:-61.4 ROLL:179.7
     """
     while True:
         if _serial is None:
@@ -82,7 +88,9 @@ def serial_reader():
             data = {
                 "ultrasonic_left_cm": parts.get("USL", 9999),
                 "ultrasonic_right_cm": parts.get("USR", 9999),
-                "tilt": False
+                "laser": parts.get("LAS", 9999),
+                "pitch": parts.get("PITCH", 9999),
+                "roll": parts.get("ROLL", 9999)
             }
             with _sensor_lock:
                 _sensor_data.update(data)
@@ -110,7 +118,7 @@ def control_loop():
 
             with _sensor_lock:
                 sensors = dict(_sensor_data)
-                
+
             command = decide(cv, cv_age_ms, sensors)
 
             if command != last_command:

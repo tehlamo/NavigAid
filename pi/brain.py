@@ -5,16 +5,20 @@ Sensor fusion + motor command logic.
 Inputs (every decision cycle ~200ms):
   cv_data    : latest POST from MacBook {obstacle, direction, distance_m, confidence}
   cv_age_ms  : milliseconds since last CV POST received
-  sensors    : latest Arduino reading {ultrasonic_left_cm, ultrasonic_right_cm}
+  sensors    : latest Arduino reading
+               {ultrasonic_left_cm, ultrasonic_right_cm, laser, pitch, roll}
 
 Output: command str
   "F" | "L" | "R" | "S"
 
 Priority (hard rules, in order):
-  1. Either ultrasonic sensor too close  → STOP (imminent collision, overrides CV)
-  2. CV fresh + confident               → steer based on obstacle direction
-  3. CV stale / offline                 → slow forward, hardware sensors still active
-  4. All clear                          → cruise forward
+  1. Pitch >= -60                       → STOP (on/off safety switch)
+  2. Both ultrasonic sensors < 80cm     → STOP
+  3. One ultrasonic sensor < 80cm       → turn away from that side
+  4. Laser <= 1m                        → choose a clear side using US + CV
+  5. CV fresh + confident               → steer based on obstacle direction (no CV stop)
+  6. CV stale / offline                 → forward, hardware sensors still active
+  7. All clear                          → forward
 
 Hysteresis: once a command is issued it holds for COMMAND_HOLD_MS before
 switching. Emergency stops (Rule 1) always override immediately.
@@ -23,7 +27,9 @@ switching. Emergency stops (Rule 1) always override immediately.
 import time
 
 # ── Thresholds ─────────────────────────────────────────────────────────────────
-ULTRASONIC_STOP_CM   = 40      # hardware override: either sensor sees obstacle < 40cm
+ULTRASONIC_STOP_CM   = 80      # sensor reaction zone: side-specific turn, both sides stop
+LASER_BLOCK_CM       = 100     # laser trigger distance (1 meter)
+PITCH_STOP_THRESHOLD = -60     # pitch >= -60 means stop/off
 CV_TIMEOUT_MS        = 500     # treat CV as offline if no POST in 500ms
 CV_MIN_CONFIDENCE    = 0.55    # ignore CV detections below this confidence
 MAX_REACT_DISTANCE_M = 2.5     # must match cv/config.py MAX_REACT_DISTANCE_M
@@ -46,28 +52,60 @@ def decide(cv_data: dict | None, cv_age_ms: float, sensors: dict) -> str:
 
     left_cm  = sensors.get("ultrasonic_left_cm", 9999)
     right_cm = sensors.get("ultrasonic_right_cm", 9999)
+    laser_cm = sensors.get("laser", 9999)
+    pitch    = sensors.get("pitch", 9999)
 
-    # ── Rule 1: Hardware sensor override ──────────────────────────────────────
-    if left_cm < ULTRASONIC_STOP_CM or right_cm < ULTRASONIC_STOP_CM:
-        if left_cm < right_cm:
-            # obstacle closer on left → steer right
+    cv_online = (cv_age_ms < CV_TIMEOUT_MS) and (cv_data is not None)
+
+    # ── Rule 1: Pitch safety switch ────────────────────────────────────────────
+    if pitch >= PITCH_STOP_THRESHOLD:
+        return _set("S", now)
+
+    # ── Rule 2/3: Ultrasonic reaction (unchanged) ─────────────────────────────
+    left_blocked = left_cm < ULTRASONIC_STOP_CM
+    right_blocked = right_cm < ULTRASONIC_STOP_CM
+
+    if left_blocked and right_blocked:
+        return _set("S", now)
+    if left_blocked:
+        return _set("R", now)
+    if right_blocked:
+        return _set("L", now)
+
+    # ── Rule 4: Laser reaction (use US + CV for side clearance) ───────────────
+    if laser_cm <= LASER_BLOCK_CM:
+        cv_left_blocked = False
+        cv_right_blocked = False
+
+        if cv_online and cv_data.get("obstacle"):
+            confidence = cv_data.get("confidence", 0.0)
+            if confidence >= CV_MIN_CONFIDENCE:
+                direction = cv_data.get("direction", "center")
+                if direction == "left":
+                    cv_left_blocked = True
+                elif direction == "right":
+                    cv_right_blocked = True
+                elif direction == "center":
+                    cv_left_blocked = True
+                    cv_right_blocked = True
+
+        left_side_blocked = left_blocked or cv_left_blocked
+        right_side_blocked = right_blocked or cv_right_blocked
+
+        if not left_side_blocked and not right_side_blocked:
             return _set("R", now)
-        elif right_cm < left_cm:
-            # obstacle closer on right → steer left
+        if left_side_blocked and not right_side_blocked:
+            return _set("R", now)
+        if right_side_blocked and not left_side_blocked:
             return _set("L", now)
-        else:
-            # both equally close → stop
-            _last_command = "S"
-            _last_command_ts = now
-            return "S"
+        return _set("S", now)
 
     # ── Hysteresis ────────────────────────────────────────────────────────────
     hold_active = (now - _last_command_ts) * 1000 < COMMAND_HOLD_MS
     if hold_active and _last_command != "S":
         return _last_command
 
-    # ── Rule 2: CV-based steering ─────────────────────────────────────────────
-    cv_online = (cv_age_ms < CV_TIMEOUT_MS) and (cv_data is not None)
+    # ── Rule 5: CV-based steering ─────────────────────────────────────────────
 
     if cv_online and cv_data.get("obstacle"):
         confidence = cv_data.get("confidence", 0.0)
@@ -78,17 +116,23 @@ def decide(cv_data: dict | None, cv_age_ms: float, sensors: dict) -> str:
         direction = cv_data.get("direction", "center")
 
         if direction == "left":
-            return _set("R", now)
-        elif direction == "right":
             return _set("L", now)
+        elif direction == "right":
+            return _set("R", now)
         else:
-            return _set("S", now)
+            # For "center"/"none"/unknown CV direction, bias toward the side
+            # with more ultrasonic clearance so CV never causes a stop command.
+            if right_cm > left_cm:
+                return _set("R", now)
+            if left_cm > right_cm:
+                return _set("L", now)
+            return _set("R" if _last_command not in ("L", "R") else _last_command, now)
 
-    # ── Rule 3: CV offline ────────────────────────────────────────────────────
+    # ── Rule 6: CV offline ────────────────────────────────────────────────────
     if not cv_online:
         return _set("F", now)
 
-    # ── Rule 4: All clear ─────────────────────────────────────────────────────
+    # ── Rule 7: All clear ─────────────────────────────────────────────────────
     return _set("F", now)
 
 
