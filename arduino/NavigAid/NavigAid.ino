@@ -1,3 +1,8 @@
+#include <Wire.h>
+#include <VL53L0X.h>
+#include "I2Cdev.h"
+#include "MPU6050.h"
+
 #define TRIG_LEFT 7
 #define ECHO_LEFT 6
 #define TRIG_RIGHT 3
@@ -7,6 +12,9 @@
 #define IN2 9
 #define IN3 10
 #define IN4 11
+
+VL53L0X laser;
+MPU6050 mpu;
 
 float readUS(int trig, int echo) {
   digitalWrite(trig, LOW);
@@ -40,6 +48,7 @@ void stopMotors() {
 
 void setup() {
   Serial.begin(9600);
+  Wire.begin();
 
   pinMode(TRIG_LEFT, OUTPUT);
   pinMode(ECHO_LEFT, INPUT);
@@ -50,14 +59,36 @@ void setup() {
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
+
+  laser.setTimeout(500);
+  if (!laser.init()) {
+    Serial.println("LAS:ERR");
+  } else {
+    laser.startContinuous();
+  }
+
+  mpu.initialize();
+  if (!mpu.testConnection()) {
+    Serial.println("GYR:ERR");
+  }
 }
 
 void loop() {
   float left  = readUS(TRIG_LEFT, ECHO_LEFT);
   float right = readUS(TRIG_RIGHT, ECHO_RIGHT);
+  uint16_t laserMm = laser.readRangeContinuousMillimeters() / 10.0;
+
+  int16_t ax, ay, az, gx, gy, gz;
+  mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+  float pitch = atan2(-ax, sqrt((float)ay*ay + (float)az*az)) * 180.0 / PI;
+  float roll  = atan2(ay, az) * 180.0 / PI;
 
   Serial.print("USL:"); Serial.print(left);
-  Serial.print(" USR:"); Serial.println(right);
+  Serial.print(" USR:"); Serial.print(right);
+  Serial.print(" LAS:"); Serial.print(laserMm);
+  Serial.print(" PITCH:"); Serial.print(pitch, 1);
+  Serial.print(" ROLL:"); Serial.println(roll, 1);
 
   if (Serial.available() > 0) {
     char cmd = Serial.read();
