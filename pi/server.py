@@ -6,6 +6,9 @@ Run: python server.py
 
 One serial connection shared between reader thread and control loop.
 Flask receives CV data from MacBook over WiFi.
+
+Serial protocol to Arduino: "<CMD><SPEED>\n"  e.g. "R82\n", "S100\n", "F55\n"
+Only sent on command change or every 1s heartbeat — prevents buffer overflow.
 """
 
 import time
@@ -53,9 +56,8 @@ def receive_cv():
             global _cv_data, _cv_timestamp
             _cv_data      = data
             _cv_timestamp = time.time()
-        # Log every incoming obstacle so you can confirm data is arriving
         if data.get("obstacle"):
-            print(f"[CV IN] obstacle={data.get('obstacle')} dir={data.get('direction')} dist={data.get('distance_m')} conf={data.get('confidence')}")
+            print(f"[CV IN] obstacle={data.get('obstacle')} dir={data.get('direction')} dist={data.get('distance_m')} conf={data.get('confidence')}", flush=True)
     return jsonify({"status": "ok"}), 200
 
 
@@ -77,17 +79,21 @@ def serial_reader():
             parts = {}
             for token in line.split():
                 if ":" in token:
-                    key, val = token.split(":")
-                    parts[key] = float(val)
+                    # partition on first colon — safe if value contains colons
+                    key, _, val = token.partition(":")
+                    try:
+                        parts[key.strip()] = float(val.strip())
+                    except ValueError:
+                        pass
             data = {
-                "ultrasonic_left_cm": parts.get("USL", 9999),
+                "ultrasonic_left_cm":  parts.get("USL", 9999),
                 "ultrasonic_right_cm": parts.get("USR", 9999),
                 "tilt": False
             }
             with _sensor_lock:
                 _sensor_data.update(data)
         except Exception as e:
-            print(f"[SERIAL] Read error: {e}")
+            print(f"[SERIAL] Read error: {e}", flush=True)
             time.sleep(0.1)
 
 
@@ -96,9 +102,11 @@ def serial_reader():
 def control_loop():
     """
     Runs every 200ms. Reads latest CV + sensor state, calls brain.decide(),
-    sends the motor command char to Arduino over the shared serial connection.
+    sends motor command to Arduino only on change or 1s heartbeat.
     """
-    last_command = None
+    last_command   = None
+    last_sent_cmd  = None
+    last_heartbeat = 0.0
 
     while True:
         try:
@@ -111,23 +119,25 @@ def control_loop():
             with _sensor_lock:
                 sensors = dict(_sensor_data)
 
-            print(f"[DEBUG] L:{sensors.get('ultrasonic_left_cm')} R:{sensors.get('ultrasonic_right_cm')} cv_age={cv_age_ms:.0f}ms cv={cv}")
-
-            command = decide(cv, cv_age_ms, sensors)
+            command, speed = decide(cv, cv_age_ms, sensors)
 
             if command != last_command:
                 conf_str = fusion_confidence(cv, cv_age_ms, sensors)
                 print(f"[BRAIN] {command}  cv_age={cv_age_ms:.0f}ms  |  {conf_str}", flush=True)
                 last_command = command
 
-            if _serial:
+            # Write on change or 1s heartbeat — prevents Arduino buffer overflow
+            changed   = command != last_sent_cmd
+            heartbeat = (now - last_heartbeat) >= 1.0
+            if _serial and (changed or heartbeat):
                 try:
-                  pass #  _serial.write(command.encode())
+                    _serial.write(f"{command}{speed}\n".encode())
+                    last_sent_cmd  = command
+                    last_heartbeat = now
                 except Exception as e:
                     print(f"[SERIAL] Write error: {e}", flush=True)
 
         except Exception as e:
-            # Never let the control loop die silently
             print(f"[CONTROL LOOP ERROR] {e} — continuing", flush=True)
 
         time.sleep(0.2)
