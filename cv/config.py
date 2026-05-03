@@ -24,13 +24,30 @@ REFERENCE_DISTANCE_M = 1.0
 
 MIN_CONFIDENCE = 0.4
 
+# Per-class bounding-box height (px) when the object is exactly 1 m away.
+# Used by estimator.get_distance() so that a chair at 1m is not mistaken for
+# a person at 2m — the single shared REFERENCE_HEIGHT_PX caused CV obstacles
+# at realistic distances to be discarded as "too far" (> MAX_REACT_DISTANCE_M).
+CLASS_REFERENCE_HEIGHT_PX = {
+    "person":    200,
+    "chair":     100,
+    "car":       150,
+    "truck":     180,
+    "bicycle":   130,
+    "dog":        90,
+    "backpack":  130,
+    "suitcase":  140,
+    "bench":      90,
+    "bus":       200,
+}
+
 # ── Depth Hazard Detection (MiDaS) ───────────────────────────────────────────
 # Set to False to disable entirely if MiDaS causes issues at the hackathon
 ENABLE_DEPTH_HAZARD = True
 
 # Step detection: how much the floor depth must DROP between adjacent columns
 # 0.0–1.0 scale (normalized depth). Lower = more sensitive, more false positives.
-DEPTH_STEP_DROP_THRESHOLD = 0.25
+DEPTH_STEP_DROP_THRESHOLD = 0.18
 
 # Pothole detection: how much a column must dip below its neighbors
 DEPTH_POTHOLE_DIP_THRESHOLD = 0.30
@@ -41,11 +58,11 @@ DEPTH_DISTANCE_SCALE = 0.5
 
 # How many consecutive analyses must agree before reporting a hazard
 # (prevents one noisy frame from stopping the cane)
-DEPTH_DEBOUNCE_COUNT = 2
+DEPTH_DEBOUNCE_COUNT = 1
 
 # Row-based step detection: drop between near floor and far floor in strip
 # Higher = less sensitive. Start at 0.30, tune down if real stairs are missed.
-DEPTH_STEP_ROW_THRESHOLD = 0.30
+DEPTH_STEP_ROW_THRESHOLD = 0.18
 
 # Maximum distance at which CV reports an obstacle to the Pi.
 # Beyond this, the object exists but is not yet an immediate threat — don't act.

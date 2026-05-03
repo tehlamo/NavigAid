@@ -10,6 +10,7 @@ Before running:
 
 import time
 import threading
+from collections import Counter, deque
 import cv2
 import requests
 import numpy as np
@@ -17,6 +18,26 @@ import numpy as np
 import config
 import detector
 import estimator
+
+# ── Direction smoothing ───────────────────────────────────────────────────────
+# YOLO direction flickers frame-to-frame, which makes the brain oscillate
+# between TURN and STOP rapidly.  Keep a rolling window of the last 5 values
+# and send the majority-vote winner.  At 100ms POSTs that's a 500ms window —
+# fast enough to react to a new obstacle, slow enough to absorb single-frame
+# noise.  "none" (no detection) is included in the vote so a brief gap doesn't
+# immediately cancel an active steer.
+_dir_buffer: deque = deque(maxlen=5)
+
+
+def _smooth_direction(raw_dir: str) -> str:
+    _dir_buffer.append(raw_dir)
+    winner, count = Counter(_dir_buffer).most_common(1)[0]
+    # Require strict majority (>50%) to commit to a new direction.
+    # If tied, return the most recent value so we don't freeze on old data.
+    if count > len(_dir_buffer) / 2:
+        return winner
+    return raw_dir
+
 
 NO_OBSTACLE_PAYLOAD = {
     "obstacle": False,
@@ -78,13 +99,15 @@ def post_to_pi(payload):
 def build_yolo_payload(det):
     if det is None:
         return None
-    distance_m = round(estimator.get_distance(det["box_h"]), 2)
-    # Don't react to obstacles that are too far away — cane would zigzag constantly
+    distance_m = estimator.get_distance(det["box_h"], det["label"])
     if distance_m > config.MAX_REACT_DISTANCE_M:
         return None
+    raw_dir = estimator.get_direction(det["x1"], det["x2"], config.FRAME_WIDTH)
+    # Only smooth actual detections — never inject "none" into the buffer so
+    # the buffer doesn't vote against a real obstacle when it first appears.
     return {
         "obstacle": True,
-        "direction": estimator.get_direction(det["cx"]),
+        "direction": _smooth_direction(raw_dir),
         "distance_m": distance_m,
         "confidence": round(det["confidence"], 2),
     }
@@ -133,7 +156,9 @@ def merge_payloads(yolo_payload, depth_payload):
 def draw_debug(frame, det, payload, depth_result):
     if det:
         cv2.rectangle(frame, (det["x1"], det["y1"]), (det["x2"], det["y2"]), (0, 255, 0), 2)
-        label = f"{det['label']} {estimator.get_direction(det['cx'])} {estimator.get_distance(det['box_h']):.1f}m"
+        direction = estimator.get_direction(det["x1"], det["x2"], config.FRAME_WIDTH)
+        dist = estimator.get_distance(det["box_h"], det["label"])
+        label = f"{det['label']} {direction} {dist:.1f}m"
         cv2.putText(frame, label, (det["x1"], det["y1"] - 8),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
