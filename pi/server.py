@@ -6,9 +6,7 @@ Run: python server.py
 
 One serial connection shared between reader thread and control loop.
 Flask receives CV data from MacBook over WiFi.
-
-Serial protocol to Arduino: "<CMD><SPEED>\n"  e.g. "R82\n", "S100\n", "F55\n"
-Only sent on command change or every 1s heartbeat — prevents buffer overflow.
+Serial sends single command char to Arduino: F | L | R | S
 """
 
 import time
@@ -38,11 +36,18 @@ SERIAL_BAUD = 9600
 def open_serial():
     global _serial
     try:
+        if _serial is not None:
+            try:
+                _serial.close()
+            except Exception:
+                pass
+            _serial = None
         _serial = serial.Serial(SERIAL_PORT, SERIAL_BAUD, timeout=1)
-        print(f"[SERIAL] Connected on {SERIAL_PORT} at {SERIAL_BAUD} baud")
+        print(f"[SERIAL] Connected on {SERIAL_PORT} at {SERIAL_BAUD} baud", flush=True)
     except Exception as e:
-        print(f"[SERIAL] Could not open {SERIAL_PORT}: {e}")
-        print("[SERIAL] Running without Arduino — commands printed to console only")
+        print(f"[SERIAL] Could not open {SERIAL_PORT}: {e}", flush=True)
+        print("[SERIAL] Running without Arduino — commands printed to console only", flush=True)
+        _serial = None
 
 
 # ── Flask endpoint ─────────────────────────────────────────────────────────────
@@ -67,27 +72,31 @@ def serial_reader():
     """
     Reads sensor data from Arduino continuously.
     Arduino sends: USL:195.96 USR:6.12
+    Retries open_serial() every 2s when disconnected.
     """
     while True:
         if _serial is None:
-            time.sleep(0.1)
+            time.sleep(2)
+            open_serial()  # keep retrying until Arduino comes back
             continue
         try:
-            line = _serial.readline().decode("utf-8").strip()
+            line = _serial.readline().decode("utf-8", errors="ignore").strip()
             if not line:
                 continue
             parts = {}
             for token in line.split():
                 if ":" in token:
-                    # partition on first colon — safe if value contains colons
                     key, _, val = token.partition(":")
                     try:
                         parts[key.strip()] = float(val.strip())
                     except ValueError:
                         pass
+            left  = parts.get("USL", 9999)
+            right = parts.get("USR", 9999)
             data = {
-                "ultrasonic_left_cm":  parts.get("USL", 9999),
-                "ultrasonic_right_cm": parts.get("USR", 9999),
+                # Filter HC-SR04 false-zero readings (< 2cm = physically impossible)
+                "ultrasonic_left_cm":  left  if left  > 2 else 9999,
+                "ultrasonic_right_cm": right if right > 2 else 9999,
                 "tilt": False
             }
             with _sensor_lock:
@@ -102,7 +111,7 @@ def serial_reader():
 def control_loop():
     """
     Runs every 200ms. Reads latest CV + sensor state, calls brain.decide(),
-    sends motor command to Arduino only on change or 1s heartbeat.
+    sends single command char to Arduino on change or 1s heartbeat.
     """
     last_command   = None
     last_sent_cmd  = None
@@ -119,23 +128,24 @@ def control_loop():
             with _sensor_lock:
                 sensors = dict(_sensor_data)
 
-            command, speed = decide(cv, cv_age_ms, sensors)
+            command = decide(cv, cv_age_ms, sensors)
 
             if command != last_command:
                 conf_str = fusion_confidence(cv, cv_age_ms, sensors)
                 print(f"[BRAIN] {command}  cv_age={cv_age_ms:.0f}ms  |  {conf_str}", flush=True)
                 last_command = command
 
-            # Write on change or 1s heartbeat — prevents Arduino buffer overflow
+            # Write on change or 1s heartbeat — prevents Arduino buffer starvation
             changed   = command != last_sent_cmd
             heartbeat = (now - last_heartbeat) >= 1.0
             if _serial and (changed or heartbeat):
                 try:
-                    _serial.write(f"{command}{speed}\n".encode())
+                    _serial.write(command.encode())
                     last_sent_cmd  = command
                     last_heartbeat = now
                 except Exception as e:
-                    print(f"[SERIAL] Write error: {e}", flush=True)
+                    print(f"[SERIAL] Write error: {e} — attempting reconnect", flush=True)
+                    open_serial()
 
         except Exception as e:
             print(f"[CONTROL LOOP ERROR] {e} — continuing", flush=True)
