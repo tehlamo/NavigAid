@@ -26,7 +26,7 @@ import estimator
 # fast enough to react to a new obstacle, slow enough to absorb single-frame
 # noise.  "none" (no detection) is included in the vote so a brief gap doesn't
 # immediately cancel an active steer.
-_dir_buffer: deque = deque(maxlen=5)
+_dir_buffer: deque = deque(maxlen=7)
 
 
 def _smooth_direction(raw_dir: str) -> str:

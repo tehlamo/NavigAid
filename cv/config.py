@@ -47,7 +47,7 @@ ENABLE_DEPTH_HAZARD = True
 
 # Step detection: how much the floor depth must DROP between adjacent columns
 # 0.0–1.0 scale (normalized depth). Lower = more sensitive, more false positives.
-DEPTH_STEP_DROP_THRESHOLD = 0.18
+DEPTH_STEP_DROP_THRESHOLD = 0.25
 
 # Pothole detection: how much a column must dip below its neighbors
 DEPTH_POTHOLE_DIP_THRESHOLD = 0.30
@@ -58,11 +58,11 @@ DEPTH_DISTANCE_SCALE = 0.5
 
 # How many consecutive analyses must agree before reporting a hazard
 # (prevents one noisy frame from stopping the cane)
-DEPTH_DEBOUNCE_COUNT = 1
+DEPTH_DEBOUNCE_COUNT = 3
 
 # Row-based step detection: drop between near floor and far floor in strip
 # Higher = less sensitive. Start at 0.30, tune down if real stairs are missed.
-DEPTH_STEP_ROW_THRESHOLD = 0.18
+DEPTH_STEP_ROW_THRESHOLD = 0.28
 
 # Maximum distance at which CV reports an obstacle to the Pi.
 # Beyond this, the object exists but is not yet an immediate threat — don't act.
