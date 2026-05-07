@@ -17,6 +17,8 @@ Phone camera → MacBook (YOLOv8 + MiDaS)
 ```
 
 ---
+<img width="3377" height="1100" alt="Untitled-2025-10-26-0713 excalidraw(1)" src="https://github.com/user-attachments/assets/8b6db9d3-21e0-460d-b8bb-ed6335b0a84f" />
+
 
 ## Setup
 
